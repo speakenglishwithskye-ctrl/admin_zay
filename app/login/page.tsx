@@ -1,34 +1,38 @@
 'use client'
-
+ 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-
+ 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
-
+ 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-
+ 
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: password,
+    })
+ 
     if (error) {
-      setError('Invalid email or password.')
+      setError('Error: ' + error.message)
       setLoading(false)
       return
     }
-
+ 
     const role = data.user?.user_metadata?.role
     router.push(role === 'admin' ? '/admin/dashboard' : '/agent/dashboard')
   }
-
+ 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm">
@@ -36,7 +40,7 @@ export default function LoginPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Inventory Manager</h1>
           <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
         </div>
-
+ 
         <div className="bg-white border border-gray-200 rounded-lg p-8">
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -52,16 +56,29 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2 pr-16 text-sm focus:outline-none focus:border-blue-500"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-blue-600 hover:text-blue-800 font-medium select-none"
+                >
+                  {showPassword ? 'HIDE' : 'SHOW'}
+                </button>
+              </div>
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded p-3">
+                <p className="text-xs text-red-600 break-all">{error}</p>
+              </div>
+            )}
             <button
               type="submit"
               disabled={loading}
@@ -77,4 +94,3 @@ export default function LoginPage() {
       </div>
     </div>
   )
-}
