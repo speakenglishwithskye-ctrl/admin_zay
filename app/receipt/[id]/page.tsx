@@ -1,30 +1,81 @@
-import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+'use client'
 
-export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createClient()
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
-  const { data: sale } = await supabase
-    .from('sales')
-    .select('id, created_at, total_amount, status, users_profiles(full_name)')
-    .eq('id', id)
-    .single()
+type SaleItem = {
+  quantity: number
+  unit_price: number
+  subtotal: number
+  products: { name: string; unit: string } | null
+}
 
-  if (!sale) return notFound()
+type Sale = {
+  id: string
+  created_at: string
+  total_amount: number
+  status: string
+  users_profiles: { full_name: string } | null
+}
 
-  const { data: items } = await supabase
-    .from('sale_items')
-    .select('quantity, unit_price, subtotal, products(name, unit)')
-    .eq('sale_id', id)
+export default function ReceiptPage() {
+  const params = useParams()
+  const id = params.id as string
+  const [sale, setSale] = useState<Sale | null>(null)
+  const [items, setItems] = useState<SaleItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+  const supabase = createClient()
+
+  useEffect(() => {
+    if (!id) return
+    const load = async () => {
+      const { data: saleData } = await supabase
+        .from('sales')
+        .select('id, created_at, total_amount, status, users_profiles(full_name)')
+        .eq('id', id)
+        .single()
+
+      if (!saleData) { setNotFound(true); setLoading(false); return }
+      setSale(saleData as any)
+
+      const { data: itemsData } = await supabase
+        .from('sale_items')
+        .select('quantity, unit_price, subtotal, products(name, unit)')
+        .eq('sale_id', id)
+
+      setItems((itemsData ?? []) as any)
+      setLoading(false)
+    }
+    load()
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-gray-500 text-sm">Loading receipt...</p>
+      </div>
+    )
+  }
+
+  if (notFound || !sale) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-gray-500 text-sm">Receipt not found.</p>
+      </div>
+    )
+  }
 
   const receiptNum = `RCP-${id.slice(-6).toUpperCase()}`
-  const date = new Date(sale.created_at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const date = new Date(sale.created_at).toLocaleString('en-GB', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-sm border border-gray-200 rounded">
-        {/* Print/Download buttons */}
         <div className="no-print flex gap-2 justify-end p-4 border-b border-gray-100">
           <button
             onClick={() => window.print()}
@@ -40,9 +91,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           </button>
         </div>
 
-        {/* Receipt body */}
         <div className="p-6 font-mono text-xs">
-          {/* Header */}
           <div className="text-center mb-4">
             <div className="w-12 h-12 bg-gray-100 rounded mx-auto mb-3 flex items-center justify-center text-gray-400 text-xs">LOGO</div>
             <p className="font-bold text-base tracking-wide text-gray-900">INVENTORY MANAGER</p>
@@ -59,7 +108,6 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
 
           <div className="border-t border-dashed border-gray-300 my-3" />
 
-          {/* Items header */}
           <div className="flex text-gray-500 mb-1">
             <span className="flex-1">Item</span>
             <span className="w-8 text-right">Qty</span>
@@ -69,8 +117,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
 
           <div className="border-t border-gray-200 mb-2" />
 
-          {/* Items */}
-          {items?.map((item: any, i) => (
+          {items.map((item, i) => (
             <div key={i} className="flex items-start mb-1 gap-1">
               <span className="flex-1 text-gray-700 leading-tight break-words pr-1">{item.products?.name}</span>
               <span className="w-8 text-right text-gray-600 flex-shrink-0">{item.quantity}</span>
@@ -89,7 +136,6 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           <div className="border-t border-dashed border-gray-300 my-3" />
 
           <p className="text-center text-gray-500">Thank you.</p>
-
           <div className="border-t border-dashed border-gray-300 mt-3" />
         </div>
       </div>
