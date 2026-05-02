@@ -33,9 +33,9 @@ const MIN_KG = 3
 
 export default function ReceiptPage() {
   const params = useParams()
-  const id = params.id as string
-  const [sale, setSale] = useState<Sale | null>(null)
-  const [items, setItems] = useState<SaleItem[]>([])
+  const id     = params.id as string
+  const [sale, setSale]       = useState<Sale | null>(null)
+  const [items, setItems]     = useState<SaleItem[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const supabase = createClient()
@@ -70,189 +70,199 @@ export default function ReceiptPage() {
     load()
   }, [id])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-500 text-sm">Loading receipt...</p>
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center space-y-3">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-gray-400 text-sm">Loading receipt...</p>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (notFound || !sale) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-500 text-sm">Receipt not found.</p>
-      </div>
-    )
-  }
+  if (notFound || !sale) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <p className="text-gray-400 text-sm">Receipt not found.</p>
+    </div>
+  )
 
-  const receiptNum = `RCP-${id.slice(-6).toUpperCase()}`
-  const date = new Date(sale.created_at).toLocaleString('en-GB', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+  const receiptNum    = `RCP-${id.slice(-6).toUpperCase()}`
+  const date          = new Date(sale.created_at).toLocaleString('en-GB', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 
   const subtotal      = sale.subtotal_amount ?? sale.total_amount
-  const deliveryFee   = sale.delivery_fee ?? 0
-  const kg            = sale.delivery_kg ?? 0
-  const basePrice     = sale.delivery_base_price ?? 0
-  const perKgPrice    = sale.delivery_per_kg_price ?? 0
-  const codFee        = sale.cod_fee ?? 0
-  const codPercent    = sale.cod_percent ?? 0
+  const deliveryFee   = sale.delivery_fee    ?? 0
+  const kg            = sale.delivery_kg     ?? 0
+  const basePrice     = sale.delivery_base_price     ?? 0
+  const perKgPrice    = sale.delivery_per_kg_price   ?? 0
+  const codFee        = sale.cod_fee         ?? 0
+  const codPercent    = sale.cod_percent     ?? 0
   const discount      = sale.discount_amount ?? 0
   const grandTotal    = sale.total_amount
   const isCOD         = sale.payment_method === 'cod'
-  const isFar         = sale.delivery_zone === 'far'
+  const isFar         = sale.delivery_zone  === 'far'
   const zone          = isFar ? 'Far' : sale.delivery_zone === 'near' ? 'Near' : null
 
-  // Effective rates for display (Far = ×2)
-  const basePriceEff  = isFar ? basePrice * 2 : basePrice
+  const basePriceEff  = isFar ? basePrice * 2  : basePrice
   const perKgEff      = isFar ? perKgPrice * 2 : perKgPrice
   const extraKg       = Math.max(0, kg - MIN_KG)
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-sm border border-gray-200 rounded shadow-sm">
+      <div className="bg-white w-full max-w-xs rounded-2xl shadow-lg overflow-hidden">
 
-        {/* Action buttons */}
-        <div className="no-print flex gap-2 justify-end p-4 border-b border-gray-100">
-          <button
-            onClick={() => window.print()}
-            className="text-xs border border-gray-300 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-50"
-          >
-            🖨 Print
+        {/* ── Action buttons (no-print) ── */}
+        <div className="no-print flex gap-2 p-3 bg-gray-50 border-b border-gray-100">
+          <button onClick={() => window.print()}
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs border border-gray-300 text-gray-600 py-2 rounded-lg hover:bg-white transition-colors">
+            🖨️ Print
           </button>
-          <button
-            onClick={() => window.print()}
-            className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700"
-          >
-            ↓ Download PDF
+          <button onClick={() => window.print()}
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            ↓ Save PDF
           </button>
         </div>
 
-        <div className="p-6 font-mono text-xs">
+        {/* ── Receipt body ── */}
+        <div className="px-5 pt-6 pb-4 font-mono text-xs">
 
-          {/* Header */}
-          <div className="text-center mb-4">
-            <div className="w-12 h-12 bg-gray-100 rounded mx-auto mb-3 flex items-center justify-center text-gray-400 text-xs">LOGO</div>
-            <p className="font-bold text-base tracking-wide text-gray-900">INVENTORY MANAGER</p>
-            <p className="font-bold text-sm tracking-widest text-gray-600">RECEIPT</p>
+          {/* Logo + brand */}
+          <div className="text-center mb-5">
+            <div className="flex justify-center mb-2">
+              {/* Your logo — make sure /logo.jpg is in the public/ folder */}
+              <img
+                src="/logo.jpg"
+                alt="Logo"
+                className="w-16 h-16 object-contain"
+                onError={(e) => {
+                  // fallback if logo not found
+                  (e.target as HTMLImageElement).style.display = 'none'
+                }}
+              />
+            </div>
+            <p className="font-bold text-sm tracking-widest text-gray-900 uppercase">Inventory Manager</p>
+            <p className="text-gray-400 text-[10px] tracking-widest mt-0.5">OFFICIAL RECEIPT</p>
           </div>
 
-          <div className="border-t border-dashed border-gray-300 my-3" />
+          {/* Dashed divider */}
+          <div className="border-t border-dashed border-gray-200 my-3" />
 
-          {/* Meta info */}
-          <div className="space-y-1 text-gray-700 mb-3">
-            <div className="flex justify-between"><span className="text-gray-500">Receipt #</span><span className="font-semibold">{receiptNum}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Date</span><span>{date}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Agent</span><span>{(sale.users_profiles as any)?.full_name ?? '—'}</span></div>
+          {/* Meta */}
+          <div className="space-y-1.5 mb-3">
+            <div className="flex justify-between text-gray-500">
+              <span>Receipt #</span><span className="font-semibold text-gray-800">{receiptNum}</span>
+            </div>
+            <div className="flex justify-between text-gray-500">
+              <span>Date</span><span className="text-gray-700">{date}</span>
+            </div>
+            <div className="flex justify-between text-gray-500">
+              <span>Agent</span><span className="text-gray-700">{(sale.users_profiles as any)?.full_name ?? '—'}</span>
+            </div>
             {sale.payment_method && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">Payment</span>
-                <span className={isCOD ? 'text-orange-600 font-semibold' : ''}>{isCOD ? 'COD' : 'Not COD'}</span>
+              <div className="flex justify-between text-gray-500">
+                <span>Payment</span>
+                <span className={`font-semibold ${isCOD ? 'text-orange-600' : 'text-gray-700'}`}>
+                  {isCOD ? '📦 COD' : '✓ Not COD'}
+                </span>
               </div>
             )}
             {zone && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">Delivery Zone</span>
-                <span className={isFar ? 'text-orange-600 font-semibold' : ''}>{zone}{isFar ? ' (×2 rate)' : ''}</span>
+              <div className="flex justify-between text-gray-500">
+                <span>Delivery Zone</span>
+                <span className={`font-semibold ${isFar ? 'text-orange-600' : 'text-gray-700'}`}>
+                  {zone}{isFar ? ' (×2 rate)' : ''}
+                </span>
               </div>
             )}
           </div>
 
-          <div className="border-t border-dashed border-gray-300 my-3" />
+          <div className="border-t border-dashed border-gray-200 my-3" />
 
           {/* Items header */}
-          <div className="flex text-gray-500 mb-1">
+          <div className="flex text-gray-400 mb-1.5 text-[10px] uppercase tracking-wide">
             <span className="flex-1">Item</span>
-            <span className="w-8 text-right">Qty</span>
-            <span className="w-16 text-right">Price</span>
-            <span className="w-16 text-right">Total</span>
+            <span className="w-7 text-right">Qty</span>
+            <span className="w-14 text-right">Price</span>
+            <span className="w-14 text-right">Total</span>
           </div>
-          <div className="border-t border-gray-200 mb-2" />
+          <div className="border-t border-gray-100 mb-2" />
 
           {/* Line items */}
           {items.map((item, i) => (
-            <div key={i} className="flex items-start mb-1 gap-1">
+            <div key={i} className="flex items-start mb-1.5 gap-1">
               <span className="flex-1 text-gray-700 leading-tight break-words pr-1">{item.products?.name}</span>
-              <span className="w-8 text-right text-gray-600 flex-shrink-0">{item.quantity}</span>
-              <span className="w-16 text-right text-gray-600 flex-shrink-0">{item.unit_price?.toLocaleString()}</span>
-              <span className="w-16 text-right font-medium flex-shrink-0">{item.subtotal?.toLocaleString()}</span>
+              <span className="w-7 text-right text-gray-500 flex-shrink-0">{item.quantity}</span>
+              <span className="w-14 text-right text-gray-500 flex-shrink-0">{item.unit_price?.toLocaleString()}</span>
+              <span className="w-14 text-right font-medium text-gray-800 flex-shrink-0">{item.subtotal?.toLocaleString()}</span>
             </div>
           ))}
 
-          <div className="border-t border-dashed border-gray-300 my-3" />
+          <div className="border-t border-dashed border-gray-200 my-3" />
 
-          {/* ── Calculation breakdown ───────────────────────────── */}
+          {/* ── Totals breakdown ── */}
+          <div className="space-y-1.5">
 
-          {/* 1. Subtotal */}
-          <div className="flex justify-between text-gray-600 mb-1">
-            <span>Subtotal</span>
-            <span>{subtotal.toLocaleString()}</span>
+            {/* 1. Subtotal */}
+            <div className="flex justify-between text-gray-500">
+              <span>Subtotal</span><span className="text-gray-700">{subtotal.toLocaleString()}</span>
+            </div>
+
+            {/* 2. Delivery with breakdown */}
+            {deliveryFee > 0 && (
+              <div>
+                <div className="flex justify-between text-gray-500">
+                  <span>Delivery — {kg}kg{zone ? ` (${zone})` : ''}</span>
+                </div>
+                <div className="pl-3 mt-0.5 space-y-0.5 text-[10px] text-gray-400">
+                  <div className="flex justify-between">
+                    <span>First {MIN_KG} kg</span><span>{basePriceEff.toLocaleString()} ฿</span>
+                  </div>
+                  {extraKg > 0 && (
+                    <div className="flex justify-between">
+                      <span>+{extraKg}kg × {perKgEff}฿</span><span>{(extraKg * perKgEff).toLocaleString()} ฿</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between text-gray-600 font-medium mt-0.5">
+                  <span>+ Delivery Fee</span><span>{deliveryFee.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 3. COD Fee */}
+            {isCOD && codFee > 0 && (
+              <div className="flex justify-between text-gray-600">
+                <span>+ COD Fee ({codPercent}%)</span><span>{codFee.toLocaleString()}</span>
+              </div>
+            )}
+
+            {/* 4. Discount */}
+            {discount > 0 && (
+              <div className="flex justify-between text-green-600 font-medium">
+                <span>− Discount</span><span>{discount.toLocaleString()}</span>
+              </div>
+            )}
           </div>
 
-          {/* 2. Delivery Fee with kg breakdown */}
-          {deliveryFee > 0 && (
-            <div className="mb-1">
-              <div className="flex justify-between text-gray-500 text-xs">
-                <span>Delivery — {kg} kg{zone ? ` (${zone})` : ''}</span>
-              </div>
-              {/* breakdown lines */}
-              <div className="pl-2 text-gray-400 space-y-0.5 mt-0.5">
-                <div className="flex justify-between">
-                  <span>First {MIN_KG} kg</span>
-                  <span>{basePriceEff.toLocaleString()} ฿</span>
-                </div>
-                {extraKg > 0 && (
-                  <div className="flex justify-between">
-                    <span>+{extraKg} kg × {perKgEff.toLocaleString()} ฿</span>
-                    <span>{(extraKg * perKgEff).toLocaleString()} ฿</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex justify-between text-gray-600 font-medium mt-0.5">
-                <span>+ Delivery Fee</span>
-                <span>{deliveryFee.toLocaleString()}</span>
-              </div>
-            </div>
-          )}
-
-          {/* 3. COD Fee */}
-          {isCOD && codFee > 0 && (
-            <div className="flex justify-between text-gray-600 mb-1">
-              <span>COD Fee ({codPercent}%)</span>
-              <span>+ {codFee.toLocaleString()}</span>
-            </div>
-          )}
-
-          {/* 4. Discount */}
-          {discount > 0 && (
-            <div className="flex justify-between text-green-600 font-medium mb-1">
-              <span>Discount</span>
-              <span>− {discount.toLocaleString()}</span>
-            </div>
-          )}
-
-          <div className="border-t border-dashed border-gray-300 my-3" />
+          <div className="border-t border-dashed border-gray-200 my-3" />
 
           {/* 5. Grand Total */}
-          <div className="flex justify-between font-bold text-sm text-gray-900">
-            <span>GRAND TOTAL</span>
-            <span>{grandTotal.toLocaleString()}</span>
+          <div className="flex justify-between items-center">
+            <span className="font-bold text-sm text-gray-900 tracking-wide">GRAND TOTAL</span>
+            <span className="font-bold text-lg text-gray-900">{grandTotal.toLocaleString()} ฿</span>
           </div>
 
-          <div className="border-t border-dashed border-gray-300 my-3" />
+          <div className="border-t border-dashed border-gray-200 my-4" />
 
-          <p className="text-center text-gray-500">Thank you.</p>
-          <div className="border-t border-dashed border-gray-300 mt-3" />
+          <p className="text-center text-gray-400 text-[10px] tracking-widest uppercase">Thank you</p>
         </div>
       </div>
 
       <style>{`
         @media print {
-          body { background: white !important; }
+          body { background: white !important; margin: 0; }
           .no-print { display: none !important; }
-          @page { margin: 0; }
+          @page { margin: 0; size: 80mm auto; }
         }
       `}</style>
     </div>
