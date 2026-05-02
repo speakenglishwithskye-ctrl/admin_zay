@@ -17,6 +17,9 @@ type Sale = {
   total_amount: number
   subtotal_amount: number | null
   delivery_fee: number | null
+  delivery_kg: number | null
+  delivery_base_price: number | null
+  delivery_per_kg_price: number | null
   cod_fee: number | null
   cod_percent: number | null
   discount_amount: number | null
@@ -25,6 +28,8 @@ type Sale = {
   status: string
   users_profiles: { full_name: string } | null
 }
+
+const MIN_KG = 3
 
 export default function ReceiptPage() {
   const params = useParams()
@@ -42,8 +47,10 @@ export default function ReceiptPage() {
         .from('sales')
         .select(`
           id, created_at, total_amount,
-          subtotal_amount, delivery_fee, cod_fee, cod_percent,
-          discount_amount, payment_method, delivery_zone,
+          subtotal_amount, delivery_fee,
+          delivery_kg, delivery_base_price, delivery_per_kg_price,
+          cod_fee, cod_percent, discount_amount,
+          payment_method, delivery_zone,
           status, users_profiles(full_name)
         `)
         .eq('id', id)
@@ -85,15 +92,23 @@ export default function ReceiptPage() {
     hour: '2-digit', minute: '2-digit',
   })
 
-  // Use stored values; fall back gracefully for old sales that don't have them
-  const subtotal = sale.subtotal_amount ?? sale.total_amount
-  const deliveryFee = sale.delivery_fee ?? 0
-  const codFee = sale.cod_fee ?? 0
-  const codPercent = sale.cod_percent ?? 0
-  const discount = sale.discount_amount ?? 0
-  const grandTotal = sale.total_amount
-  const isCOD = sale.payment_method === 'cod'
-  const zone = sale.delivery_zone === 'far' ? 'Far' : sale.delivery_zone === 'near' ? 'Near' : null
+  const subtotal      = sale.subtotal_amount ?? sale.total_amount
+  const deliveryFee   = sale.delivery_fee ?? 0
+  const kg            = sale.delivery_kg ?? 0
+  const basePrice     = sale.delivery_base_price ?? 0
+  const perKgPrice    = sale.delivery_per_kg_price ?? 0
+  const codFee        = sale.cod_fee ?? 0
+  const codPercent    = sale.cod_percent ?? 0
+  const discount      = sale.discount_amount ?? 0
+  const grandTotal    = sale.total_amount
+  const isCOD         = sale.payment_method === 'cod'
+  const isFar         = sale.delivery_zone === 'far'
+  const zone          = isFar ? 'Far' : sale.delivery_zone === 'near' ? 'Near' : null
+
+  // Effective rates for display (Far = ×2)
+  const basePriceEff  = isFar ? basePrice * 2 : basePrice
+  const perKgEff      = isFar ? perKgPrice * 2 : perKgPrice
+  const extraKg       = Math.max(0, kg - MIN_KG)
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
@@ -138,7 +153,10 @@ export default function ReceiptPage() {
               </div>
             )}
             {zone && (
-              <div className="flex justify-between"><span className="text-gray-500">Delivery Zone</span><span>{zone}</span></div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Delivery Zone</span>
+                <span className={isFar ? 'text-orange-600 font-semibold' : ''}>{zone}{isFar ? ' (×2 rate)' : ''}</span>
+              </div>
             )}
           </div>
 
@@ -165,7 +183,7 @@ export default function ReceiptPage() {
 
           <div className="border-t border-dashed border-gray-300 my-3" />
 
-          {/* ── Calculation breakdown ─────────────────────────── */}
+          {/* ── Calculation breakdown ───────────────────────────── */}
 
           {/* 1. Subtotal */}
           <div className="flex justify-between text-gray-600 mb-1">
@@ -173,15 +191,33 @@ export default function ReceiptPage() {
             <span>{subtotal.toLocaleString()}</span>
           </div>
 
-          {/* 2. Delivery Fee */}
+          {/* 2. Delivery Fee with kg breakdown */}
           {deliveryFee > 0 && (
-            <div className="flex justify-between text-gray-600 mb-1">
-              <span>Delivery Fee{zone ? ` (${zone})` : ''}</span>
-              <span>+ {deliveryFee.toLocaleString()}</span>
+            <div className="mb-1">
+              <div className="flex justify-between text-gray-500 text-xs">
+                <span>Delivery — {kg} kg{zone ? ` (${zone})` : ''}</span>
+              </div>
+              {/* breakdown lines */}
+              <div className="pl-2 text-gray-400 space-y-0.5 mt-0.5">
+                <div className="flex justify-between">
+                  <span>First {MIN_KG} kg</span>
+                  <span>{basePriceEff.toLocaleString()} ฿</span>
+                </div>
+                {extraKg > 0 && (
+                  <div className="flex justify-between">
+                    <span>+{extraKg} kg × {perKgEff.toLocaleString()} ฿</span>
+                    <span>{(extraKg * perKgEff).toLocaleString()} ฿</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-between text-gray-600 font-medium mt-0.5">
+                <span>+ Delivery Fee</span>
+                <span>{deliveryFee.toLocaleString()}</span>
+              </div>
             </div>
           )}
 
-          {/* 3. COD Fee (only if COD) */}
+          {/* 3. COD Fee */}
           {isCOD && codFee > 0 && (
             <div className="flex justify-between text-gray-600 mb-1">
               <span>COD Fee ({codPercent}%)</span>
@@ -189,7 +225,7 @@ export default function ReceiptPage() {
             </div>
           )}
 
-          {/* 4. Discount — always last before total */}
+          {/* 4. Discount */}
           {discount > 0 && (
             <div className="flex justify-between text-green-600 font-medium mb-1">
               <span>Discount</span>

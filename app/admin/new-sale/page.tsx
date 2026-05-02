@@ -10,6 +10,7 @@ type PaymentMethod = 'cod' | 'not_cod'
 type DeliveryZone = 'near' | 'far'
 
 const PAGE_SIZE = 50
+const MIN_KG = 3 // minimum kg (base price covers up to this)
 
 export default function NewSalePage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -23,7 +24,12 @@ export default function NewSalePage() {
   // Order fields
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('not_cod')
   const [deliveryZone, setDeliveryZone] = useState<DeliveryZone>('near')
-  const [deliveryFee, setDeliveryFee] = useState('')
+
+  // Delivery kg-based pricing inputs (Near zone rates — Far auto-doubles)
+  const [basePrice, setBasePrice] = useState('')       // price for first 3 kg (Near)
+  const [perKgPrice, setPerKgPrice] = useState('')     // price per extra kg above 3 (Near)
+  const [totalKg, setTotalKg] = useState('')           // total kg entered by agent
+
   const [codPercent, setCodPercent] = useState('')
   const [discount, setDiscount] = useState('')
 
@@ -61,13 +67,27 @@ export default function NewSalePage() {
     else setCart(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: qty } : i))
   }
 
-  // ── Calculation logic ──────────────────────────────────────────────
-  const subtotal = cart.reduce((s, i) => s + i.product.sale_price * i.quantity, 0)
-  const deliveryFeeNum = parseFloat(deliveryFee) || 0
-  const codFeeNum = paymentMethod === 'cod' ? Math.round(subtotal * (parseFloat(codPercent) || 0) / 100) : 0
+  // ── Delivery fee calculation ───────────────────────────────────────
+  const basePriceNear = parseFloat(basePrice) || 0   // Near: price for up to 3 kg
+  const perKgNear     = parseFloat(perKgPrice) || 0  // Near: price per kg above 3
+  const kg            = parseFloat(totalKg) || 0
+
+  // Far zone rates = Near × 2
+  const basePriceEff = deliveryZone === 'far' ? basePriceNear * 2 : basePriceNear
+  const perKgEff     = deliveryZone === 'far' ? perKgNear * 2     : perKgNear
+
+  // Delivery fee = base (covers first MIN_KG) + extra kg × per-kg rate
+  const extraKg       = Math.max(0, kg - MIN_KG)
+  const deliveryFeeNum = kg > 0 && basePriceEff > 0
+    ? basePriceEff + (extraKg * perKgEff)
+    : 0
+
+  // ── Rest of calculation ───────────────────────────────────────────
+  const subtotal    = cart.reduce((s, i) => s + i.product.sale_price * i.quantity, 0)
+  const codFeeNum   = paymentMethod === 'cod' ? Math.round(subtotal * (parseFloat(codPercent) || 0) / 100) : 0
   const discountNum = parseFloat(discount) || 0
-  const grandTotal = subtotal + deliveryFeeNum + codFeeNum - discountNum
-  // ──────────────────────────────────────────────────────────────────
+  const grandTotal  = subtotal + deliveryFeeNum + codFeeNum - discountNum
+  // ─────────────────────────────────────────────────────────────────
 
   const handleConfirm = async () => {
     if (cart.length === 0) return
@@ -83,6 +103,9 @@ export default function NewSalePage() {
         total_amount: grandTotal,
         subtotal_amount: subtotal,
         delivery_fee: deliveryFeeNum,
+        delivery_kg: kg,
+        delivery_base_price: basePriceNear,
+        delivery_per_kg_price: perKgNear,
         cod_fee: codFeeNum,
         cod_percent: paymentMethod === 'cod' ? (parseFloat(codPercent) || 0) : 0,
         discount_amount: discountNum,
@@ -121,24 +144,26 @@ export default function NewSalePage() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
-  // ── Styles ─────────────────────────────────────────────────────────
-  const cardBg = dark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-  const textMain = dark ? 'text-gray-100' : 'text-gray-900'
-  const textSub = dark ? 'text-gray-400' : 'text-gray-400'
-  const textMuted = dark ? 'text-gray-500' : 'text-gray-400'
-  const inputCls = `w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-    dark ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+  // ── Styles ────────────────────────────────────────────────────────
+  const cardBg      = dark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+  const textMain    = dark ? 'text-gray-100' : 'text-gray-900'
+  const textSub     = dark ? 'text-gray-400' : 'text-gray-400'
+  const textMuted   = dark ? 'text-gray-500' : 'text-gray-400'
+  const inputCls    = `w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+    dark ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500'
+         : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
   }`
-  const segBtnBase = 'flex-1 py-1 text-xs font-medium rounded transition-colors'
-  const segActive = 'bg-blue-600 text-white'
-  const segInactive = dark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-  const pageBtnBase = 'px-3 py-1.5 rounded text-xs font-medium border transition-colors'
+  const segBtnBase    = 'flex-1 py-1 text-xs font-medium rounded transition-colors'
+  const segActive     = 'bg-blue-600 text-white'
+  const segInactive   = dark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+  const pageBtnBase   = 'px-3 py-1.5 rounded text-xs font-medium border transition-colors'
   const pageBtnActive = 'bg-blue-600 text-white border-blue-600'
   const pageBtnInactive = dark
     ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
     : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-  const divider = dark ? 'border-gray-700' : 'border-gray-200'
+  const divider  = dark ? 'border-gray-700' : 'border-gray-200'
   const labelCls = `text-xs font-medium ${dark ? 'text-gray-400' : 'text-gray-500'} mb-1 block`
+  const infoBg   = dark ? 'bg-gray-700 text-gray-300' : 'bg-blue-50 text-blue-700'
 
   return (
     <div className="flex gap-6 h-[calc(100vh-80px)]">
@@ -260,7 +285,7 @@ export default function NewSalePage() {
             {/* 1. Payment Method */}
             <div>
               <label className={labelCls}>Payment Method</label>
-              <div className="flex gap-1 p-0.5 rounded bg-gray-100 dark:bg-gray-700">
+              <div className={`flex gap-1 p-0.5 rounded ${dark ? 'bg-gray-700' : 'bg-gray-100'}`}>
                 <button onClick={() => setPaymentMethod('not_cod')}
                   className={`${segBtnBase} ${paymentMethod === 'not_cod' ? segActive : segInactive}`}>
                   Not COD
@@ -275,32 +300,97 @@ export default function NewSalePage() {
             {/* 2. Delivery Zone */}
             <div>
               <label className={labelCls}>Delivery Zone</label>
-              <div className="flex gap-1 p-0.5 rounded bg-gray-100 dark:bg-gray-700">
+              <div className={`flex gap-1 p-0.5 rounded ${dark ? 'bg-gray-700' : 'bg-gray-100'}`}>
                 <button onClick={() => setDeliveryZone('near')}
                   className={`${segBtnBase} ${deliveryZone === 'near' ? segActive : segInactive}`}>
                   Near
                 </button>
                 <button onClick={() => setDeliveryZone('far')}
                   className={`${segBtnBase} ${deliveryZone === 'far' ? segActive : segInactive}`}>
-                  Far
+                  Far ×2
                 </button>
               </div>
             </div>
 
-            {/* 3. Delivery Fee */}
-            <div>
-              <label className={labelCls}>Delivery Fee (Baht)</label>
-              <input
-                type="number"
-                min="0"
-                placeholder="0"
-                value={deliveryFee}
-                onChange={e => setDeliveryFee(e.target.value)}
-                className={inputCls}
-              />
+            {/* 3. Delivery Pricing (kg-based) */}
+            <div className="space-y-2">
+              <label className={labelCls}>
+                Delivery Pricing (kg)
+                {deliveryZone === 'far' && (
+                  <span className="ml-1 text-orange-500 font-semibold">— Far ×2 applied</span>
+                )}
+              </label>
+
+              {/* Rate info card — shows effective rates for selected zone */}
+              {(basePriceNear > 0 || perKgNear > 0) && (
+                <div className={`rounded px-2 py-1.5 text-xs space-y-0.5 ${infoBg}`}>
+                  <div className="flex justify-between">
+                    <span>First {MIN_KG} kg rate</span>
+                    <span className="font-semibold">{basePriceEff.toLocaleString()} ฿</span>
+                  </div>
+                  {perKgNear > 0 && (
+                    <div className="flex justify-between">
+                      <span>Per extra kg rate</span>
+                      <span className="font-semibold">{perKgEff.toLocaleString()} ฿</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Base price input (Near rate) */}
+              <div>
+                <span className={`text-xs ${textMuted} mb-0.5 block`}>
+                  First {MIN_KG} kg price — Near zone (฿)
+                </span>
+                <input
+                  type="number" min="0" placeholder="e.g. 40"
+                  value={basePrice}
+                  onChange={e => setBasePrice(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Per-kg price input (Near rate) */}
+              <div>
+                <span className={`text-xs ${textMuted} mb-0.5 block`}>
+                  Each extra kg price — Near zone (฿)
+                </span>
+                <input
+                  type="number" min="0" placeholder="e.g. 10"
+                  value={perKgPrice}
+                  onChange={e => setPerKgPrice(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Total kg input */}
+              <div>
+                <span className={`text-xs ${textMuted} mb-0.5 block`}>Total weight (kg)</span>
+                <input
+                  type="number" min="0" step="0.1" placeholder={`min ${MIN_KG} kg`}
+                  value={totalKg}
+                  onChange={e => setTotalKg(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Delivery fee breakdown */}
               {deliveryFeeNum > 0 && (
-                <div className={`flex justify-between text-xs mt-1 ${textMuted}`}>
-                  <span>+ Delivery</span><span>{deliveryFeeNum.toLocaleString()}</span>
+                <div className={`rounded px-2 py-1.5 text-xs space-y-0.5 ${dark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <div className={`flex justify-between ${textMuted}`}>
+                    <span>Base ({MIN_KG} kg)</span>
+                    <span>{basePriceEff.toLocaleString()} ฿</span>
+                  </div>
+                  {extraKg > 0 && (
+                    <div className={`flex justify-between ${textMuted}`}>
+                      <span>+{extraKg} kg × {perKgEff.toLocaleString()} ฿</span>
+                      <span>{(extraKg * perKgEff).toLocaleString()} ฿</span>
+                    </div>
+                  )}
+                  <div className={`flex justify-between font-semibold border-t pt-0.5 ${divider} ${textMain}`}>
+                    <span>+ Delivery Fee</span>
+                    <span>{deliveryFeeNum.toLocaleString()} ฿</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -310,11 +400,7 @@ export default function NewSalePage() {
               <div>
                 <label className={labelCls}>COD Fee (%)</label>
                 <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="0"
+                  type="number" min="0" max="100" step="0.1" placeholder="0"
                   value={codPercent}
                   onChange={e => setCodPercent(e.target.value)}
                   className={inputCls}
@@ -331,9 +417,7 @@ export default function NewSalePage() {
             <div>
               <label className={labelCls}>Discount (Baht)</label>
               <input
-                type="number"
-                min="0"
-                placeholder="0"
+                type="number" min="0" placeholder="0"
                 value={discount}
                 onChange={e => setDiscount(e.target.value)}
                 className={inputCls}
@@ -350,7 +434,7 @@ export default function NewSalePage() {
             {/* Grand Total */}
             <div className="flex justify-between items-center">
               <span className={`text-sm font-bold ${textMain}`}>Grand Total</span>
-              <span className={`text-lg font-bold text-blue-500`}>{grandTotal.toLocaleString()}</span>
+              <span className="text-lg font-bold text-blue-500">{grandTotal.toLocaleString()}</span>
             </div>
 
             <button
